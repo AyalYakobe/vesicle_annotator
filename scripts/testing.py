@@ -24,3 +24,29 @@ def testing():
     print("Image file keys:", image_keys)
     print("Label file keys:", label_keys)
     print("Mask file keys:", mask_keys)
+
+from sklearn.metrics import accuracy_score
+
+def print_predictions_and_compare_accuracy(model, data_loader, device='cpu'):
+    model.eval()  # Set the model to evaluation mode
+    y_true = []
+    y_pred = []
+
+    with torch.no_grad():  # Disable gradient computation
+        for batch_idx, (inputs, targets, _) in enumerate(data_loader):
+            inputs = inputs.float().unsqueeze(1).to(device)  # Add channel dimension for grayscale
+            outputs = model(inputs)
+            _, predicted = torch.max(outputs, 1)  # Get the index of the max log-probability
+
+            # Collect true labels and predictions
+            y_true.extend(targets.cpu().numpy())
+            y_pred.extend(predicted.cpu().numpy())
+
+            # Print predictions and labels for the current batch
+            print(f"Batch {batch_idx}:")
+            print(f"Predictions: {predicted.cpu().numpy()}")
+            print(f"Labels: {targets.cpu().numpy()}")
+
+    # Calculate and print overall accuracy
+    accuracy = accuracy_score(y_true, y_pred)
+    print(f'Overall Accuracy: {accuracy:.4f}')

@@ -1,37 +1,31 @@
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
-from tqdm import tqdm
+import os
 import numpy as np
+import h5py
+from tqdm import tqdm
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data as data
-import h5py
-import os
-
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 # Initialize constants
-NUM_EPOCHS = 20  # Increased number of epochs for further training
+NUM_EPOCHS = 20
 BATCH_SIZE = 128
 lr = 0.001
 CHECKPOINT_PATH = '../model_checkpoint.pth'
 
-
 # Function to load HDF5 files
 def load_hdf5(file_path):
-    print("LOADING HDF5 FILES")
     with h5py.File(file_path, 'r') as f:
         data = {key: np.array(f[key]) for key in f.keys()}
     return data
 
-
 # Function to preprocess data
 def preprocess_data(image):
-    # Basically converts to a tensor and adjusts brightness uniformly
     image = torch.tensor(image, dtype=torch.float32)
     mean = image.mean()
     std = image.std()
     return (image - mean) / std
-
 
 # Custom dataset class
 class CustomDataset(data.Dataset):
@@ -63,10 +57,8 @@ class CustomDataset(data.Dataset):
 
         return image, label, mask
 
-
 # Function to create data loaders
 def create_data_loaders(image_file, label_file, mask_file, batch_size):
-    print("CREATING DATA LOADER")
     images = load_hdf5(image_file)['main']
     labels = load_hdf5(label_file)['main']
     masks = load_hdf5(mask_file)['main']
@@ -75,7 +67,6 @@ def create_data_loaders(image_file, label_file, mask_file, batch_size):
     loader = data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     return loader
-
 
 # Define a simple CNN model
 class Net(nn.Module):
@@ -120,15 +111,12 @@ class Net(nn.Module):
         x = self.fc(x)
         return x
 
-
 # Function to create model
 def create_model(in_channels, num_classes, task):
-    print("CREATING THE MODEL")
     model = Net(in_channels=in_channels, num_classes=num_classes)
-    criterion = nn.BCEWithLogitsLoss() if task == "multi-label, binary-class" else nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
     return model, criterion, optimizer
-
 
 # Training function with checkpointing
 def train_model(model, criterion, optimizer, train_loader, task, start_epoch=0, num_epochs=NUM_EPOCHS,
@@ -139,7 +127,7 @@ def train_model(model, criterion, optimizer, train_loader, task, start_epoch=0, 
             optimizer.zero_grad()
             inputs = inputs.float().unsqueeze(1)  # Adding channel dimension for grayscale
             outputs = model(inputs)
-            targets = targets.to(torch.float32) if task == 'multi-label, binary-class' else targets.squeeze().long()
+            targets = targets.long()
             loss = criterion(outputs, targets)
             loss.backward()
             optimizer.step()
@@ -154,7 +142,6 @@ def train_model(model, criterion, optimizer, train_loader, task, start_epoch=0, 
 
         print(f"Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item():.4f}")
 
-
 # Function to load checkpoint
 def load_checkpoint(model, optimizer, checkpoint_path=CHECKPOINT_PATH):
     if os.path.exists(checkpoint_path):
@@ -168,10 +155,8 @@ def load_checkpoint(model, optimizer, checkpoint_path=CHECKPOINT_PATH):
         print("No checkpoint found, starting from scratch.")
         return 0
 
-
 # Evaluation function
 def evaluate_model(model, data_loader, task, split, save_path=None):
-    print("EVALUATING THE MODEL")
     model.eval()
     y_true = []
     y_pred = []
@@ -185,11 +170,6 @@ def evaluate_model(model, data_loader, task, split, save_path=None):
 
             # Print debug information
             print(f"Batch {batch_idx}: inputs shape {inputs.shape}, predicted shape {predicted.shape}")
-
-            # If save_path is provided, reshape and save the segmentations
-            if save_path:
-                inputs_np = inputs.cpu().numpy().squeeze(1)  # Remove channel dimension for saving
-                #save_segmentations_to_obj(inputs_np, predicted.cpu().numpy(), save_path, batch_idx)
 
     accuracy = accuracy_score(y_true, y_pred)
     precision = precision_score(y_true, y_pred, average='weighted', zero_division=0)
