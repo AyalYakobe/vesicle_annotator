@@ -9,7 +9,7 @@ import torch.utils.data as data
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 # Initialize constants
-NUM_EPOCHS = 20
+NUM_EPOCHS = 2
 BATCH_SIZE = 128
 lr = 0.001
 CHECKPOINT_PATH = '../model_checkpoint.pth'
@@ -29,7 +29,7 @@ def preprocess_data(image):
 
 # Custom dataset class
 class CustomDataset(data.Dataset):
-    def __init__(self, images, labels, masks, transform=None):
+    def __init__(self, images, labels=None, masks=None, transform=None):
         self.images = images
         self.labels = labels
         self.masks = masks
@@ -40,11 +40,8 @@ class CustomDataset(data.Dataset):
 
     def __getitem__(self, idx):
         image = self.images[idx]
-        label = self.labels[idx]
-        mask = self.masks[idx]
-
-        # Ensure label is within the valid range
-        label = min(label, 2)
+        label = self.labels[idx] if self.labels is not None else None
+        mask = self.masks[idx] if self.masks is not None else None
 
         # Reshape image to [5, 31, 31]
         image = image.transpose(2, 0, 1)  # from [31, 31, 5] to [5, 31, 31]
@@ -55,12 +52,15 @@ class CustomDataset(data.Dataset):
         else:
             image = preprocess_data(image)
 
-        return image, label, mask
+        if label is not None:
+            return image, label, mask
+        else:
+            return image, mask
 
 # Function to create data loaders
 def create_data_loaders(image_file, label_file, mask_file, batch_size):
     images = load_hdf5(image_file)['main']
-    labels = load_hdf5(label_file)['main']
+    labels = load_hdf5(label_file)['main']-1
     masks = load_hdf5(mask_file)['main']
 
     dataset = CustomDataset(images, labels, masks, transform=None)

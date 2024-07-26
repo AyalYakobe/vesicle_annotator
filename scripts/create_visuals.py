@@ -52,6 +52,7 @@ def visualize_final_product_3d(images, prediction, save_path):
     else:
         label = 'DVH'
         color = 'red'
+        print("DVH FOUND")
 
     ax.scatter(x[outlined_image == 1].flatten(), y[outlined_image == 1].flatten(), z[outlined_image == 1].flatten(), c=color, marker='o', s=40, alpha=1.0, label=label)
 
@@ -118,6 +119,7 @@ def visualize_point_cloud(points, intensities, vesicle_mask, prediction, save_pa
     plotter = pv.Plotter()
     plotter.add_points(point_cloud, scalars=colors / 255.0, rgb=True)
     plotter.add_text(f'Prediction: {"DV" if prediction == 0 else "CV" if prediction == 1 else "DVH"}', position='upper_edge', font_size=10, color='white')
+    if prediction == 2: print("DVH")
     plotter.show(screenshot=os.path.join(save_path, 'point_cloud.png'))
     plotter.close()
 
