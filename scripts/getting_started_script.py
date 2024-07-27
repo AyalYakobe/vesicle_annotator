@@ -9,10 +9,13 @@ import torch.utils.data as data
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 # Initialize constants
-NUM_EPOCHS = 2
+NUM_EPOCHS = 20
 BATCH_SIZE = 128
 lr = 0.001
 CHECKPOINT_PATH = '../model_checkpoint.pth'
+n_channels = 1
+n_classes = 3
+task = 'classification'  # Specify the task type
 
 # Function to load HDF5 files
 def load_hdf5(file_path):
