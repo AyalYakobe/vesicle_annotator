@@ -64,6 +64,7 @@ def show_visuals():
     end_time = time.time()
     print(f"Visualizations generated in {end_time - start_time:.2f} seconds")
 
+
 def eval_model_results(image_file, label_file, mask_file):
     model = Net(in_channels=n_channels, num_classes=n_classes)
     optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9)

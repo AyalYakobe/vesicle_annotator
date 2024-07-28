@@ -107,15 +107,16 @@ def convert_to_one_hot(prediction, shape, num_classes):
         one_hot_mask[i, ...] = (prediction == i)
     return one_hot_mask
 
-def create_test_data_loaders(image_file, mask_file, label_file, batch_size):
-    images = load_hdf5(image_file)['main']
-    masks = load_hdf5(mask_file)['main']
-    labels = load_hdf5(label_file)['main']
+def create_test_data_loaders(test_image_file, test_mask_file, test_label_file, batch_size):
+    images = load_hdf5(test_image_file)['main']
+    masks = load_hdf5(test_mask_file)['main']
+    labels = load_hdf5(test_label_file)['main']
 
-    dataset = CustomDataset(images=images, masks=masks, transform=None)
+    dataset = CustomDataset(images=images, labels=labels, masks=masks, transform=None)
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
     return loader, labels
+
 
 # Function to perform predictions on test images
 def test_model(model, data_loader, true_labels, save_dir):
@@ -126,7 +127,7 @@ def test_model(model, data_loader, true_labels, save_dir):
     image_paths = []  # List to store paths of saved images
 
     with torch.no_grad():
-        for index, (inputs, masks) in enumerate(data_loader):
+        for index, (inputs, labels, masks) in enumerate(data_loader):  # Adjusted to unpack three values
             inputs = inputs.float().unsqueeze(1)  # Adding channel dimension for grayscale
             outputs = model(inputs)
             _, predicted = torch.max(outputs, 1)
@@ -154,3 +155,6 @@ def test_model(model, data_loader, true_labels, save_dir):
                 visualize_image_with_prediction(image, prediction_one_hot[1], mask, true_label, pred_label, save_dir, index * len(inputs) + i + 1)
                 image_paths.append(save_path)
                 num_images_saved += 1  # Increment the counter
+
+    # In case fewer than 5 images are processed
+    generate_html(image_paths, save_dir)
