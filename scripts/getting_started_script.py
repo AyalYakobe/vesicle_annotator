@@ -15,7 +15,7 @@ lr = 0.001
 CHECKPOINT_PATH = '../model_checkpoint.pth'
 n_channels = 1
 n_classes = 3
-task = 'classification'  # Specify the task type
+task = "Classification"
 
 # Function to load HDF5 files
 def load_hdf5(file_path):
@@ -32,7 +32,7 @@ def preprocess_data(image):
 
 # Custom dataset class
 class CustomDataset(data.Dataset):
-    def __init__(self, images, labels=None, masks=None, transform=None):
+    def __init__(self, images, labels, masks, transform=None):
         self.images = images
         self.labels = labels
         self.masks = masks
@@ -43,8 +43,11 @@ class CustomDataset(data.Dataset):
 
     def __getitem__(self, idx):
         image = self.images[idx]
-        label = self.labels[idx] if self.labels is not None else None
-        mask = self.masks[idx] if self.masks is not None else None
+        label = self.labels[idx]
+        mask = self.masks[idx]
+
+        # Ensure label is within the valid range
+        label = min(label, 2)
 
         # Reshape image to [5, 31, 31]
         image = image.transpose(2, 0, 1)  # from [31, 31, 5] to [5, 31, 31]
@@ -55,16 +58,12 @@ class CustomDataset(data.Dataset):
         else:
             image = preprocess_data(image)
 
-        if label is not None:
-            return image, label, mask
-        else:
-            return image, mask
-
+        return image, label, mask
 
 # Function to create data loaders
 def create_data_loaders(image_file, label_file, mask_file, batch_size):
     images = load_hdf5(image_file)['main']
-    labels = load_hdf5(label_file)['main']-1
+    labels = load_hdf5(label_file)['main']
     masks = load_hdf5(mask_file)['main']
 
     dataset = CustomDataset(images, labels, masks, transform=None)
@@ -160,27 +159,3 @@ def load_checkpoint(model, optimizer, checkpoint_path=CHECKPOINT_PATH):
         return 0
 
 # Evaluation function
-def evaluate_model(model, data_loader, task, split, save_path=None):
-    model.eval()
-    y_true = []
-    y_pred = []
-    with torch.no_grad():
-        for batch_idx, (inputs, targets, _) in enumerate(data_loader):
-            inputs = inputs.float().unsqueeze(1)  # Adding channel dimension for grayscale
-            outputs = model(inputs)
-            _, predicted = torch.max(outputs, 1)
-            y_true.extend(targets.cpu().numpy())
-            y_pred.extend(predicted.cpu().numpy())
-
-            # Print debug information
-            print(f"Batch {batch_idx}: inputs shape {inputs.shape}, predicted shape {predicted.shape}")
-
-    accuracy = accuracy_score(y_true, y_pred)
-    precision = precision_score(y_true, y_pred, average='weighted', zero_division=0)
-    recall = recall_score(y_true, y_pred, average='weighted')
-    f1 = f1_score(y_true, y_pred, average='weighted')
-
-    print(f'{split} Accuracy: {accuracy:.4f}')
-    print(f'{split} Precision: {precision:.4f}')
-    print(f'{split} Recall: {recall:.4f}')
-    print(f'{split} F1 Score: {f1:.4f}')
