@@ -1,14 +1,12 @@
-import logging
 import os
+import logging
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
 from skimage.measure import find_contours
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from torch.utils.data import DataLoader
 
 from scripts.getting_started_script import load_hdf5, CustomDataset, BATCH_SIZE, Net, n_channels, n_classes
-
 
 # Function to visualize image, prediction, and mask
 def visualize_image_with_prediction(image, prediction, mask, label, pred_label, save_dir, index):
@@ -56,15 +54,12 @@ def visualize_image_with_prediction(image, prediction, mask, label, pred_label, 
     plt.savefig(save_path)
     plt.close(fig)
     print(f"Saved prediction image to {save_path}")
-    return save_path  # Return the save path of the image
-
 
 def convert_to_one_hot(prediction, shape, num_classes):
     one_hot_mask = np.zeros((num_classes, *shape), dtype=np.int32)
     for i in range(num_classes):
         one_hot_mask[i, ...] = (prediction == i)
     return one_hot_mask
-
 
 def create_test_data_loaders(image_file, mask_file, batch_size):
     images = load_hdf5(image_file)['main']
@@ -75,13 +70,14 @@ def create_test_data_loaders(image_file, mask_file, batch_size):
 
     return loader
 
-
 # Function to perform predictions on test images
 def test_model(model, data_loader, save_dir):
     model.eval()
     y_true = []
     y_pred = []
-    image_paths = []  # List to store the paths of saved images
+    num_images_saved = 0  # Counter to keep track of saved images
+    image_paths = []  # List to store paths of saved images
+
     with torch.no_grad():
         for index, (inputs, masks) in enumerate(data_loader):
             inputs = inputs.float().unsqueeze(1)  # Adding channel dimension for grayscale
@@ -89,6 +85,10 @@ def test_model(model, data_loader, save_dir):
             _, predicted = torch.max(outputs, 1)
 
             for i in range(inputs.size(0)):
+                if num_images_saved >= 5:
+                    generate_html(image_paths, save_dir)  # Generate HTML after saving 5 images
+                    return
+
                 image = inputs[i, 0].cpu().numpy()
                 prediction = predicted[i].cpu().numpy()
                 mask = masks[i].cpu().numpy()
@@ -102,13 +102,10 @@ def test_model(model, data_loader, save_dir):
                 y_pred.extend(prediction.flatten())
 
                 # Visualize the prediction and save the image
-                save_path = visualize_image_with_prediction(image, prediction_one_hot[1], mask, 'N/A', pred_label, save_dir, index * len(inputs) + i + 1)
-                image_paths.append(save_path)  # Collect the path of the saved image
-
-                if len(image_paths) >= 10:  # For example, stop after saving 10 images
-                    return image_paths
-    return image_paths
-
+                save_path = os.path.join(save_dir, f'prediction_{index * len(inputs) + i + 1}.png')
+                visualize_image_with_prediction(image, prediction_one_hot[1], mask, 'N/A', pred_label, save_dir, index * len(inputs) + i + 1)
+                image_paths.append(save_path)
+                num_images_saved += 1  # Increment the counter
 
 def load_model_checkpoint(model, checkpoint_path):
     try:
@@ -122,14 +119,47 @@ def load_model_checkpoint(model, checkpoint_path):
     except Exception as e:
         logging.error(f"Failed to load model checkpoint from {checkpoint_path}: {e}")
 
+def generate_html(image_paths, save_dir):
+    # Sort images by prediction type
+    dv_images = []
+    cv_images = []
+    dvh_images = []
 
-def generate_html(image_paths, html_path):
-    with open(html_path, 'w') as f:
-        f.write('<html>\n<head>\n<title>Image Predictions</title>\n</head>\n<body>\n')
-        for img_path in image_paths:
-            relative_path = os.path.relpath(img_path, os.path.dirname(html_path))
-            f.write(f'<img src="{relative_path}" alt="{os.path.basename(img_path)}"><br>\n')
-        f.write('</body>\n</html>')
+    for image_path in image_paths:
+        if 'DV' in image_path:
+            dv_images.append(image_path)
+        elif 'CV' in image_path:
+            cv_images.append(image_path)
+        else:
+            dvh_images.append(image_path)
+
+    # Generate HTML content
+    html_content = '<html><body>\n'
+
+    # Add sections for each prediction type
+    if dv_images:
+        html_content += '<h2>DV Predictions</h2>\n'
+        for image_path in dv_images:
+            relative_path = os.path.relpath(image_path, save_dir)
+            html_content += f'<img src="{relative_path}" alt="DV Prediction Image" style="width:100%;">\n'
+
+    if cv_images:
+        html_content += '<h2>CV Predictions</h2>\n'
+        for image_path in cv_images:
+            relative_path = os.path.relpath(image_path, save_dir)
+            html_content += f'<img src="{relative_path}" alt="CV Prediction Image" style="width:100%;">\n'
+
+    if dvh_images:
+        html_content += '<h2>DVH Predictions</h2>\n'
+        for image_path in dvh_images:
+            relative_path = os.path.relpath(image_path, save_dir)
+            html_content += f'<img src="{relative_path}" alt="DVH Prediction Image" style="width:100%;">\n'
+
+    html_content += '</body></html>'
+
+    html_path = os.path.join(save_dir, 'index.html')
+    with open(html_path, 'w') as html_file:
+        html_file.write(html_content)
     print(f"Saved HTML file to {html_path}")
 
 
@@ -146,17 +176,14 @@ if __name__ == '__main__':
     test_mask_file = '/Users/ayalyakobe/vesicle_annotations/big_vesicle_cls_testing/bigV_cls_202406_mask.h5'
 
     save_dir = '/Users/ayalyakobe/vesicle_annotations/image_predictions'
-    html_path = os.path.join(save_dir, 'predictions.html')
 
     logging.info('==> Evaluating ...')
 
     # Create data loader for test images
-    test_loader = create_test_data_loaders(test_image_file, test_mask_file, BATCH_SIZE)
+    test_loader = create_test_data_loaders(image_file, mask_file, BATCH_SIZE)
     model = Net(in_channels=n_channels, num_classes=n_classes)
     load_model_checkpoint(model, '/Users/ayalyakobe/vesicle_annotations/model_checkpoint.pth')
 
     # Perform predictions on test images and evaluate
-    image_paths = test_model(model, test_loader, save_dir)
-    generate_html(image_paths, html_path)
-
+    test_model(model, test_loader, save_dir)
     logging.info(f"Model testing completed in {time.time() - start_time:.2f} seconds")
