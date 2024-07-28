@@ -60,6 +60,7 @@ class CustomDataset(data.Dataset):
         else:
             return image, mask
 
+
 # Function to create data loaders
 def create_data_loaders(image_file, label_file, mask_file, batch_size):
     images = load_hdf5(image_file)['main']

@@ -7,6 +7,7 @@ from skimage.measure import find_contours
 from torch.utils.data import DataLoader
 
 from scripts.getting_started_script import load_hdf5, CustomDataset, BATCH_SIZE, Net, n_channels, n_classes
+from scripts.html_visuals import generate_html
 
 # Function to visualize image, prediction, and mask
 def visualize_image_with_prediction(image, prediction, mask, label, pred_label, save_dir, index):
@@ -61,17 +62,18 @@ def convert_to_one_hot(prediction, shape, num_classes):
         one_hot_mask[i, ...] = (prediction == i)
     return one_hot_mask
 
-def create_test_data_loaders(image_file, mask_file, batch_size):
+def create_test_data_loaders(image_file, mask_file, label_file, batch_size):
     images = load_hdf5(image_file)['main']
     masks = load_hdf5(mask_file)['main']
+    labels = load_hdf5(label_file)['main']
 
     dataset = CustomDataset(images=images, masks=masks, transform=None)
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
-    return loader
+    return loader, labels
 
 # Function to perform predictions on test images
-def test_model(model, data_loader, save_dir):
+def test_model(model, data_loader, true_labels, save_dir):
     model.eval()
     y_true = []
     y_pred = []
@@ -93,6 +95,7 @@ def test_model(model, data_loader, save_dir):
                 prediction = predicted[i].cpu().numpy()
                 mask = masks[i].cpu().numpy()
                 pred_label = predicted[i].cpu().item()
+                true_label = true_labels[index * inputs.size(0) + i] if index * inputs.size(0) + i < len(true_labels) else 'N/A'
 
                 # Convert the predicted labels to one-hot encoded mask
                 prediction_one_hot = convert_to_one_hot(prediction, image.shape, n_classes)
@@ -103,7 +106,7 @@ def test_model(model, data_loader, save_dir):
 
                 # Visualize the prediction and save the image
                 save_path = os.path.join(save_dir, f'prediction_{index * len(inputs) + i + 1}.png')
-                visualize_image_with_prediction(image, prediction_one_hot[1], mask, 'N/A', pred_label, save_dir, index * len(inputs) + i + 1)
+                visualize_image_with_prediction(image, prediction_one_hot[1], mask, true_label, pred_label, save_dir, index * len(inputs) + i + 1)
                 image_paths.append(save_path)
                 num_images_saved += 1  # Increment the counter
 
@@ -119,50 +122,6 @@ def load_model_checkpoint(model, checkpoint_path):
     except Exception as e:
         logging.error(f"Failed to load model checkpoint from {checkpoint_path}: {e}")
 
-def generate_html(image_paths, save_dir):
-    # Sort images by prediction type
-    dv_images = []
-    cv_images = []
-    dvh_images = []
-
-    for image_path in image_paths:
-        if 'DV' in image_path:
-            dv_images.append(image_path)
-        elif 'CV' in image_path:
-            cv_images.append(image_path)
-        else:
-            dvh_images.append(image_path)
-
-    # Generate HTML content
-    html_content = '<html><body>\n'
-
-    # Add sections for each prediction type
-    if dv_images:
-        html_content += '<h2>DV Predictions</h2>\n'
-        for image_path in dv_images:
-            relative_path = os.path.relpath(image_path, save_dir)
-            html_content += f'<img src="{relative_path}" alt="DV Prediction Image" style="width:100%;">\n'
-
-    if cv_images:
-        html_content += '<h2>CV Predictions</h2>\n'
-        for image_path in cv_images:
-            relative_path = os.path.relpath(image_path, save_dir)
-            html_content += f'<img src="{relative_path}" alt="CV Prediction Image" style="width:100%;">\n'
-
-    if dvh_images:
-        html_content += '<h2>DVH Predictions</h2>\n'
-        for image_path in dvh_images:
-            relative_path = os.path.relpath(image_path, save_dir)
-            html_content += f'<img src="{relative_path}" alt="DVH Prediction Image" style="width:100%;">\n'
-
-    html_content += '</body></html>'
-
-    html_path = os.path.join(save_dir, 'index.html')
-    with open(html_path, 'w') as html_file:
-        html_file.write(html_content)
-    print(f"Saved HTML file to {html_path}")
-
-
 if __name__ == '__main__':
     import time
 
@@ -172,18 +131,16 @@ if __name__ == '__main__':
     image_file = '/Users/ayalyakobe/vesicle_annotations/big_vesicle_cls/bigV_cls_im_v2.h5'
     label_file = '/Users/ayalyakobe/vesicle_annotations/big_vesicle_cls/bigV_cls_label_v2.h5'
     mask_file = '/Users/ayalyakobe/vesicle_annotations/big_vesicle_cls/bigV_cls_mask_v2.h5'
-    test_image_file = '/Users/ayalyakobe/vesicle_annotations/big_vesicle_cls_testing/bigV_cls_202406_im.h5'
-    test_mask_file = '/Users/ayalyakobe/vesicle_annotations/big_vesicle_cls_testing/bigV_cls_202406_mask.h5'
 
     save_dir = '/Users/ayalyakobe/vesicle_annotations/image_predictions'
 
     logging.info('==> Evaluating ...')
 
     # Create data loader for test images
-    test_loader = create_test_data_loaders(image_file, mask_file, BATCH_SIZE)
+    test_loader, true_labels = create_test_data_loaders(image_file, mask_file, label_file, BATCH_SIZE)
     model = Net(in_channels=n_channels, num_classes=n_classes)
     load_model_checkpoint(model, '/Users/ayalyakobe/vesicle_annotations/model_checkpoint.pth')
 
     # Perform predictions on test images and evaluate
-    test_model(model, test_loader, save_dir)
+    test_model(model, test_loader, true_labels, save_dir)
     logging.info(f"Model testing completed in {time.time() - start_time:.2f} seconds")
