@@ -1,5 +1,4 @@
 import os
-import os
 import logging
 import numpy as np
 import matplotlib.pyplot as plt
@@ -55,6 +54,15 @@ def generate_html(image_paths, save_dir):
     print(f"Saved HTML file to {html_path}")
 
 
+def get_label_text(label):
+    if label == 0:
+        return 'DV'
+    elif label == 1:
+        return 'CV'
+    else:
+        return 'DVH'
+
+
 def visualize_image_with_prediction(image, prediction, mask, label, pred_label, save_dir, index):
     print(f"Image shape: {image.shape}")
     print(f"Prediction shape: {prediction.shape}")
@@ -67,15 +75,9 @@ def visualize_image_with_prediction(image, prediction, mask, label, pred_label, 
         contours_mask = find_contours(mask[i], level=0.5)
         contours_pred = find_contours(prediction[i], level=0.5)
 
-        if pred_label == 0:
-            pred_label_text = 'DV'
-            color = 'blue'
-        elif pred_label == 1:
-            pred_label_text = 'CV'
-            color = 'green'
-        else:
-            pred_label_text = 'DVH'
-            color = 'red'
+        pred_label_text = get_label_text(pred_label)
+        true_label_text = get_label_text(label)
+        color = 'blue' if pred_label == 0 else 'green' if pred_label == 1 else 'red'
 
         # Display the original image slice with mask outline
         ax[0, i].imshow(image[:, i, :], cmap='gray')
@@ -91,7 +93,7 @@ def visualize_image_with_prediction(image, prediction, mask, label, pred_label, 
         ax[1, i].set_title(f'Image with Prediction Outline Slice {i} ({pred_label_text})')
         ax[1, i].axis('off')
 
-    plt.suptitle(f'True Label: {label}, Pred Label: {pred_label_text}', fontsize=18)
+    plt.suptitle(f'True Label: {true_label_text}, Pred Label: {pred_label_text}', fontsize=18)
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
     # Save the figure
@@ -158,3 +160,4 @@ def test_model(model, data_loader, true_labels, save_dir):
 
     # In case fewer than 5 images are processed
     generate_html(image_paths, save_dir)
+
